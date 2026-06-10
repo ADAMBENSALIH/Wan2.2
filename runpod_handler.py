@@ -1,68 +1,44 @@
 import runpod
-import torch
-import torchvision
-import os
 
-# 👇 import ديال model ديالك
-from wan.text2video import WanT2V
-from wan.config import config  # إلا عندك config
+model = None
 
-# =========================
-# 🔥 Load model ONCE (important)
-# =========================
-model = WanT2V(
-    config=config,
-    checkpoint_dir="checkpoints",
-    device_id=0
-)
+def load_model():
+    global model
+    if model is None:
+        from wan.text2video import WanT2V
+        from wan.config import config
 
-# =========================
-# 🚀 RunPod handler
-# =========================
+        model = WanT2V(
+            config=config,
+            checkpoint_dir="checkpoints",
+            device_id=0
+        )
+    return model
+
+
 def handler(event):
+    model = load_model()
+
     input_data = event["input"]
 
-    prompt = input_data.get("prompt", "")
-    width = input_data.get("width", 1280)
-    height = input_data.get("height", 720)
-    steps = input_data.get("steps", 30)
-    seed = input_data.get("seed", -1)
+    prompt = input_data["prompt"]
 
-    # =========================
-    # 🎬 Generate video
-    # =========================
     video_tensor = model.generate(
         input_prompt=prompt,
-        size=(width, height),
+        size=(1280, 720),
         frame_num=81,
-        sampling_steps=steps,
+        sampling_steps=30,
         guide_scale=5.0,
-        seed=seed,
+        seed=-1,
         offload_model=True
     )
 
-    # =========================
-    # 💾 Save MP4
-    # =========================
-    output_path = "/tmp/output.mp4"
-
-    # tensor format: (C, T, H, W)
-    video_tensor = video_tensor.permute(1, 2, 3, 0).cpu()
-
-    torchvision.io.write_video(
-        output_path,
-        video_tensor,
-        fps=16
-    )
-
     return {
-        "video_path": output_path,
-        "status": "success"
+        "status": "success",
+        "video": "generated"
     }
 
-# =========================
-# 🔌 Start RunPod serverless
-# =========================
+
 runpod.serverless.start({
     "handler": handler
 })
